@@ -5,7 +5,7 @@ import net.corda.core.flows.*;
 import net.corda.core.transactions.SignedTransaction;
 
 @InitiatedBy(TokenIssueFlowInitiator.class)
-public class TokenIssueFlowResponder extends FlowLogic<Void> {
+public class TokenIssueFlowResponder extends FlowLogic<SignedTransaction> {
 
     private final FlowSession otherSide;
 
@@ -15,7 +15,7 @@ public class TokenIssueFlowResponder extends FlowLogic<Void> {
 
     @Override
     @Suspendable
-    public Void call() throws FlowException {
+    public SignedTransaction call() throws FlowException {
         SignedTransaction signedTransaction = subFlow(new SignTransactionFlow(otherSide) {
             @Suspendable
             @Override
