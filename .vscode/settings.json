@@ -3,5 +3,6 @@
         "name": "CustomTestConfig",
         "workingDirectory": "${workspaceFolder}",
         "vmargs": ["-ea", "-javaagent:lib/quasar.jar"]
-    }
+    },
+    "vscode-corda.isCordaProject": true
 }
