@@ -11,7 +11,7 @@ import net.corda.core.transactions.SignedTransaction;
 
 @InitiatedBy(TokenMultiIssueFlowInitiator.class)
 public class TokenMultiIssueFlowResponder extends FlowLogic<SignedTransaction> {
-
+ 
     private final FlowSession otherSideSession;
 
     public TokenMultiIssueFlowResponder(FlowSession otherSideSession) {
@@ -22,16 +22,24 @@ public class TokenMultiIssueFlowResponder extends FlowLogic<SignedTransaction> {
     @Suspendable
 	public SignedTransaction call() throws FlowException {
 
-        SignedTransaction signedTransaction = subFlow(new SignTransactionFlow(otherSideSession) {
-            @Suspendable
-            @Override
-            protected void checkTransaction(SignedTransaction stx) throws FlowException {
+    /* ===================================================================================================
+    *  The following is commented out as the holder of a newly issued token does not need to sign the txn
+    *  If a responder is required to sign, (as dictated by the signers list in the transaction command)
+    *  the following code is necessary.
+    * ====================================================================================================*/
+    //    
+    //     SignedTransaction signedTransaction = subFlow(new SignTransactionFlow(otherSideSession) {
+    //         @Suspendable
+    //         @Override
+    //         protected void checkTransaction(SignedTransaction stx) throws FlowException {
                 
-                // Implement responder flow transaction checks here
-            }
-        });
-        subFlow(new ReceiveFinalityFlow(otherSideSession, signedTransaction.getId()));
-        return null;
+    //             // Implement responder flow transaction checks here
+    //         }
+    //     });
+
+    // We wait for the finalized transaction with our new tokens
+
+        return subFlow(new ReceiveFinalityFlow(otherSideSession));
 	}
     
 }

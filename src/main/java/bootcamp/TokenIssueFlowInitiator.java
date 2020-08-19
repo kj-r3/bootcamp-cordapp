@@ -40,24 +40,24 @@ public class TokenIssueFlowInitiator extends FlowLogic<SignedTransaction> {
         Party issuer = getOurIdentity();
 
         /* ============================================================================
-         *         TODO 1 - Create our TokenState to represent on-ledger tokens!
+         *  Phase 1 - Create our TokenState to represent on-ledger tokens!
          * ===========================================================================*/
         // We create our new TokenState.
         TokenState tokenState = new TokenState(issuer, owner, amount);
 
 
         /* ============================================================================
-         *      TODO 3 - Build our token issuance transaction to update the ledger!
+         *  Phase 2 - Build our token issuance transaction to update the ledger!
          * ===========================================================================*/
         // We build our transaction.
         TransactionBuilder txnBuilder = new TransactionBuilder();
         txnBuilder.setNotary(notary);
         txnBuilder.addOutputState(tokenState, TokenContract.TOKEN_CONTRACT_ID);
-        List<PublicKey> requiredSigners = ImmutableList.of(tokenState.getIssuer().getOwningKey(), tokenState.getHolder().getOwningKey());
+        List<PublicKey> requiredSigners = ImmutableList.of(tokenState.getIssuer().getOwningKey());
         txnBuilder.addCommand(new TokenContract.Commands.Issue(), requiredSigners);
 
         /* ============================================================================
-         *          TODO 2 - Write our TokenContract to control token issuance!
+         *  Phase 3 - Verify the transaction and notify the owner of the new tokens!
          * ===========================================================================*/
         // We check our transaction is valid based on its contracts.
         txnBuilder.verify(getServiceHub());
@@ -67,10 +67,7 @@ public class TokenIssueFlowInitiator extends FlowLogic<SignedTransaction> {
         // We sign the transaction with our private key, making it immutable.
         SignedTransaction signedTransaction = getServiceHub().signInitialTransaction(txnBuilder);
 
-        // The counterparty signs the transaction
-        SignedTransaction fullySignedTransaction = subFlow(new CollectSignaturesFlow(signedTransaction, singletonList(session)));
-
         // We get the transaction notarised and recorded automatically by the platform.
-        return subFlow(new FinalityFlow(fullySignedTransaction, singletonList(session)));
+        return subFlow(new FinalityFlow(signedTransaction, singletonList(session)));
     }
 }

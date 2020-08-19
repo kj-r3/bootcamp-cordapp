@@ -13,6 +13,7 @@ import net.corda.core.utilities.ProgressTracker;
 import net.corda.core.utilities.ProgressTracker.Step;
 
 import java.security.PublicKey;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import kotlin.Pair;
@@ -20,16 +21,22 @@ import kotlin.Pair;
 @InitiatingFlow
 @StartableByRPC
 public class TokenMultiIssueFlowInitiator extends FlowLogic<SignedTransaction> {
-    private final List<Pair<Party, Long>> heldQuantities;
+    private final List<Pair<Party,Long>> heldQuantities;
 
-    public TokenMultiIssueFlowInitiator(List<Pair<Party, Long>> heldQuantities) {
+    public TokenMultiIssueFlowInitiator(List<Pair<Party,Long>> heldQuantities) {
         this.heldQuantities = heldQuantities;
+    }
+
+    //This is the command line friendly constructor, makes sure that we can test in the IDE
+    //Using Complex objects in the constructor is not testable in the IDE
+    public TokenMultiIssueFlowInitiator(final Party holder, final long quantity) {
+        this(Collections.singletonList(new Pair<>(holder, quantity)));
     }
 
     private final Step GENERATING_TRANSACTION = new Step("Generating transaction based on new token issuance.");
     private final Step VERIFYING_TRANSACTION = new Step("Verifying contract constraints.");
     private final Step SIGNING_TRANSACTION = new Step("Signing transaction with our private key.");
-    private final Step GATHERING_SIGS = new Step("Gathering the partner's signature.") {
+    private final Step GATHERING_HOLDERS = new Step("Gathering all the holders") {
         @Override
         public ProgressTracker childProgressTracker() {
             return CollectSignaturesFlow.Companion.tracker();
@@ -46,7 +53,7 @@ public class TokenMultiIssueFlowInitiator extends FlowLogic<SignedTransaction> {
             new ProgressTracker(GENERATING_TRANSACTION,
                     VERIFYING_TRANSACTION,
                     SIGNING_TRANSACTION,
-                    GATHERING_SIGS,
+                    GATHERING_HOLDERS,
                     FINALIZING_TRANSACTION);
     @Override
     public ProgressTracker getProgressTracker() {
@@ -62,18 +69,22 @@ public class TokenMultiIssueFlowInitiator extends FlowLogic<SignedTransaction> {
         Party issuer = getOurIdentity();
 
         /* ============================================================================
-         *         TODO 1 - Create our TokenState to represent on-ledger tokens!
+         *  Phase 1 - Create our TokenState(s) to represent new on-ledger tokens!
          * ===========================================================================*/
+        
         // We create our new TokenState.
         progressTracker.setCurrentStep(GENERATING_TRANSACTION);
         final List<TokenState> outputTokens = heldQuantities
-                .stream()
-                .map(it -> new TokenState(issuer, it.getFirst(), it.getSecond()))
-                .collect(Collectors.toList());
+            //piple list into a stream
+            .stream()
+            //extract each element into a new token state
+            .map(it -> new TokenState(issuer, it.getFirst(), it.getSecond()))
+            //collate each new element into a list
+            .collect(Collectors.toList());
 
 
         /* ============================================================================
-         *      TODO 3 - Build our token issuance transaction to update the ledger!
+         *  Phase 2 - Build our token issuance transaction to update the ledger!
          * ===========================================================================*/
         // We build our transaction.
         TransactionBuilder txnBuilder = new TransactionBuilder();
@@ -83,32 +94,28 @@ public class TokenMultiIssueFlowInitiator extends FlowLogic<SignedTransaction> {
         outputTokens.forEach(it -> txnBuilder.addOutputState(it, TokenContract.TOKEN_CONTRACT_ID));
 
         /* ============================================================================
-         *          TODO 2 - Write our TokenContract to control token issuance!
+         *  Phase 3 - Verify new tokens meet the Contract standard and send out transaction for signature!
          * ===========================================================================*/
         progressTracker.setCurrentStep(VERIFYING_TRANSACTION);
         // We check our transaction is valid based on its contracts.
         txnBuilder.verify(getServiceHub());
 
         progressTracker.setCurrentStep(SIGNING_TRANSACTION);
-        // We sign the transaction with our private key, making it immutable.
+        // We sign the transaction as the issuer with our private key, making it immutable.
         SignedTransaction signedTransaction = getServiceHub().signInitialTransaction(txnBuilder);
 
-        progressTracker.setCurrentStep(GATHERING_SIGS);
+        progressTracker.setCurrentStep(GATHERING_HOLDERS);
         List<FlowSession> sessionList = outputTokens.stream()
             .map(TokenState::getHolder)        //get all the holders from the stream
             .distinct()                        //filter out dupes
-            .filter(it -> !it.equals(issuer))  //filter out any issuers here
+            .filter(it -> !it.equals(issuer))  //filter ourselves out as we have signed and are the issuer
             .map(it -> this.initiateFlow(it))  //start flow for each of the holders
             .collect(Collectors.toList());     //return the sessions to the list (could be written this::initiateFlow)
-
-
-        // The counterparty signs the transaction
-        SignedTransaction fullySignedTransaction = subFlow(new CollectSignaturesFlow(signedTransaction, sessionList, GATHERING_SIGS.childProgressTracker()));
 
         progressTracker.setCurrentStep(FINALIZING_TRANSACTION);
         // We get the transaction notarised and recorded automatically by the platform.
         
-        SignedTransaction notarisedTxn = subFlow(new FinalityFlow(fullySignedTransaction, sessionList, FINALIZING_TRANSACTION.childProgressTracker()));
+        SignedTransaction notarisedTxn = subFlow(new FinalityFlow(signedTransaction, sessionList, FINALIZING_TRANSACTION.childProgressTracker()));
         
         // We want our issuer to have a trace of the amounts that have been issued, whether it is a holder or not,
         // in order to know the total supply. Since the issuer is not in the participants, it needs to be done

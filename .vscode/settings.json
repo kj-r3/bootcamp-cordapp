@@ -4,5 +4,6 @@
         "workingDirectory": "${workspaceFolder}",
         "vmargs": ["-ea", "-javaagent:lib/quasar.jar"]
     },
-    "vscode-corda.isCordaProject": true
+    "vscode-corda.isCordaProject": true,
+    "vscode-corda.nodesAreRunning": false
 }
